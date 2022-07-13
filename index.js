@@ -172,6 +172,13 @@ class Picture {
     return i;
   }
 }
+class Flag {
+  constructor(sflag = false) {
+    this.sflag = sflag;
+    if (sflag) this.image = Picture.Load("/images/Sflagt.png");
+    else this.image = Picture.Load("/images/Flagt.png");
+  }
+}
 class Car {
   //  image = Car.Picture("images/bluecar24t2.png");
   image = Picture.Load("images/bluecar24t2.png");
