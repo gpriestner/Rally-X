@@ -430,6 +430,16 @@ class Chaser {
     return Map.getPosition(pos.x, pos.y) === 0;
   }
   isReverse = (dir) => this.dir.x === -dir.x && this.dir.y === -dir.y;
+  get reverseDirection() {
+    return { x: -this.dir.x, y: -this.dir.y };
+  }
+  reverse() {
+    this.dir = this.reverseDirection;
+    this.x += this.dir.x;
+    this.y += this.dir.y;
+    this.pos = this.GridPos;
+    this.rotate = 2;
+  }
   get directions() {
     // get all the possible directions to travel from current position (ignore reverse)
     const directions = [];
@@ -466,6 +476,9 @@ class Chaser {
     // turn must be anti-clockwise
     else return -1;
   }
+  isSameCell(chaser) {
+    return chaser !== this && chaser.pos.x === this.pos.x && chaser.pos.y === this.pos.y;
+  }
   update(progress, counter) {
     if (counter == 1) {
       if (this.crash > 0) {
@@ -477,16 +490,27 @@ class Chaser {
         this.pos = this.GridPos;
 
         const centrePos = this.centrePoint;
-
         if (this.isGoingNS)
           if (this.x > centrePos.x) this.x -= 1;
           else if (this.x < centrePos.x) this.x += 1;
-
         if (this.isGoingEW)
           if (this.y > centrePos.y) this.y -= 1;
           else if (this.y < centrePos.y) this.y += 1;
 
+        let rev = false;
         if (this.isEnterCell) {
+          // check to see if cell just entered already has another chaser, if so reverse (for now)
+          for (const chaser of game.chasers) {
+            if (this.isSameCell(chaser)) {
+              // this.reverse();
+              rev = true;
+            }
+          }
+
+          if (rev) {
+            this.reverse();
+          } else {
+
           // calc if a turn is needed, and if so set this.dir and this.rotate
           const directions = this.directions;
 
@@ -503,6 +527,7 @@ class Chaser {
             this.rotate = this.rotation(this.dir, direction);
             this.dir = direction;
           }
+        }
         }
 
         /*
