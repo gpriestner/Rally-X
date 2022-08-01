@@ -140,6 +140,9 @@ class GameInput {
   static get isMoveEast() {
     return Keyboard.isDown("ArrowRight") || GamePad.isDown(1 /* Right */);
   }
+  static get isSmoke() {
+    return Keyboard.isPressed("Space") || GamePad.isPressed(5);
+  }
   static get isZoomIn() {
     return Keyboard.isDown("KeyA") || GamePad.isDown(12 /* UpJoyPad */);
   }
@@ -173,10 +176,150 @@ class Picture {
   }
 }
 class Flag {
-  constructor(sflag = false) {
+  constructor(gridX, gridY, sflag) {
+    this.collected = false;
+    this.x = 5 * 24 + gridX * 24 + 12;
+    this.y = 4 * 24 + gridY * 24 + 12;
     this.sflag = sflag;
-    if (sflag) this.image = Picture.Load("/images/Sflagt.png");
-    else this.image = Picture.Load("/images/Flagt.png");
+    if (sflag) this.image = Picture.Load("images/Sflagt.png");
+    else this.image = Picture.Load("images/Flagt.png");
+  }
+  get GridPos() {
+    // convert actual position into grid coords
+    return {
+      x: Math.floor((this.x - 120) / 24),
+      y: Math.floor((this.y - 96) / 24),
+    };
+  }
+  update(progress, counter) {
+    if (counter === 1) {
+      const dist =
+        Math.abs(game.car.x - this.x) ** 2 + Math.abs(game.car.y - this.y) ** 2;
+      if (dist < 100) {
+        this.collected = true;
+      }
+    }
+  }
+  draw() {
+    if (!this.collected) {
+      const pos = Map.Convert(this.x, this.y);
+
+      Game.View.save();
+
+      Game.View.translate(pos.x, pos.y);
+
+      Game.View.drawImage(
+        this.image,
+        0,
+        0,
+        24,
+        24,
+        -0.5 * Car.scale * pos.scale.x, // 0, // pos.x,
+        -0.5 * Car.scale * pos.scale.y, // -10, // pos.y,
+        Car.scale * pos.scale.x,
+        Car.scale * pos.scale.y
+      );
+
+      Game.View.restore();
+    }
+  }
+}
+class Flags {
+  constructor() {
+    this.flags = [];
+
+    for (let i = 0; i < 10; ++i) {
+      const pos = this.randomCell;
+      this.flags.push(new Flag(pos.x, pos.y, i === 0 ? true : false));
+    }
+  }
+  get Collected() {
+    let count = 0;
+    for (f of this.flags) if (f.collected) count += 1;
+    return count;
+  }
+  get randomCell() {
+    while (true) {
+      const x = Math.floor(Math.random() * 32);
+      const y = Math.floor(Math.random() * 56);
+      if (Map.getPosition(x, y) === 0) return { x, y };
+    }
+  }
+  update(progress, counter) {
+    for (const flag of this.flags) flag.update(progress, counter);
+  }
+  draw() {
+    for (const flag of this.flags) flag.draw();
+  }
+}
+class Smoke {
+  constructor(pos) {
+    this.x = pos.x;
+    this.y = pos.y;
+    this.ttl = 159;
+    this.angle = 0;
+    this.image = Picture.Load("images/smoket.png");
+    if (Math.random() > 0.5) this.delta = 0.1;
+    else this.delta = -0.1;
+  }
+  update(progesss, counter) {
+    if (counter === 1 && this.ttl > 0) {
+      this.ttl -= 1;
+
+      for (const chaser of game.chasers.chasers) {
+        const dist =
+          Math.abs(chaser.x - this.x) ** 2 + Math.abs(chaser.y - this.y) ** 2;
+        if (dist < 100) {
+          chaser.crash = this.ttl;
+        }
+      }
+    }
+  }
+  draw() {
+    if (this.ttl > 0) {
+      const pos = Map.Convert(this.x, this.y);
+
+      Game.View.save();
+
+      Game.View.translate(pos.x, pos.y);
+
+      let shrinkFactor = 1;
+      if (this.ttl < 50) {
+        shrinkFactor = this.ttl / 50;
+        Game.View.globalAlpha = shrinkFactor;
+
+        this.angle += this.delta;
+        Game.View.rotate(this.angle);
+      }
+
+      Game.View.drawImage(
+        this.image,
+        0,
+        0,
+        24,
+        24,
+        -0.5 * Car.scale * pos.scale.x,
+        -0.5 * Car.scale * pos.scale.y,
+        Car.scale * pos.scale.x * shrinkFactor,
+        Car.scale * pos.scale.y * shrinkFactor
+      );
+
+      Game.View.restore();
+    }
+  }
+}
+class Smokes {
+  constructor() {
+    this.smokes = [];
+  }
+  update(progress, counter) {
+    for (const smoke of this.smokes) smoke.update(progress, counter);
+
+    if (counter === 1 && GameInput.isSmoke)
+      this.smokes.push(new Smoke(game.car.Pos));
+  }
+  draw() {
+    for (const smoke of this.smokes) smoke.draw();
   }
 }
 class Car {
@@ -191,6 +334,9 @@ class Car {
     this.angle = 0;
     this.carScale = 24;
     this.speed = 0;
+  }
+  get Pos() {
+    return { x: this.x, y: this.y };
   }
   get Top() {
     return this.y;
@@ -240,10 +386,6 @@ class Car {
     if (GameInput.isCarScaleUp && Car.scale < 50.01) Car.scale += 0.1;
   }
   draw() {
-    const actualCarWidth = 24;
-    const actualCarHeight = 24;
-    //var oldStyle = Game.View.strokeStyle;
-    //Game.View.strokeStyle = "blue";
     const pos = Map.Convert(this.x, this.y);
     //Game.View.fillRect(pos.x, pos.y, 16, 16);
     //Game.View.strokeStyle = oldStyle;
@@ -264,8 +406,8 @@ class Car {
       0,
       24,
       24,
-      -0.5 * Car.scale * pos.scale.x, // 0, // pos.x,
-      -0.5 * Car.scale * pos.scale.y, // -10, // pos.y,
+      -0.5 * Car.scale * pos.scale.x, // previous translate means centre
+      -0.5 * Car.scale * pos.scale.y, // of this image is at 0,0
       Car.scale * pos.scale.x,
       Car.scale * pos.scale.y
     );
@@ -283,10 +425,10 @@ class Car {
 class Chaser {
   static count = 0;
   image = Picture.Load("images/redcar24t2.png");
-  constructor(x = 15, y = 53) {
-    this.x = 5 * 24 + x * 24 + 12; // = 504 + 12;   pixel x position
-    this.y = 4 * 24 + y * 24 + 12; // 868 + 12;     pixel y position
-    this.pos = { x, y }; //                         grid cell x,y position
+  constructor(pos) {
+    this.x = 5 * 24 + pos.x * 24 + 12; // = 504 + 12;   pixel x position
+    this.y = 4 * 24 + pos.y * 24 + 12; // 868 + 12;     pixel y position
+    this.pos = pos; //                         grid cell x,y position
     this.angle = 0;
     this.carScale = 24;
     this.speed = 1;
@@ -308,41 +450,6 @@ class Chaser {
       y: Math.floor((this.y - 96) / 24),
     };
   }
-  /*
-  get North() {
-    const pos = this.GridPos;
-    return Map.getPosition(pos.x, pos.y - 1);
-  }
-  get NorthCell() {
-    // grid position of north cell
-    const pos = this.GridPos;
-    return { x: pos.x, y: pos.y - 1 };
-  }
-  get South() {
-    const pos = this.GridPos;
-    return Map.getPosition(pos.x, pos.y + 1);
-  }
-  get SouthCell() {
-    const pos = this.GridPos;
-    return { x: pos.x, y: pos.y + 1 };
-  }
-  get East() {
-    const pos = this.GridPos;
-    return Map.getPosition(pos.x + 1, pos.y);
-  }
-  get EastCell() {
-    const pos = this.GridPos;
-    return { x: pos.x + 1, y: pos.y };
-  }
-  get West() {
-    const pos = this.GridPos;
-    return Map.getPosition(pos.x - 1, pos.y);
-  }
-  get WestCell() {
-    const pos = this.GridPos;
-    return { x: pos.x - 1, y: pos.y };
-  }
-  */
   get isMidCell() {
     // is the current actual x,y position in the exact pixel centre of cell
     return (
@@ -390,25 +497,6 @@ class Chaser {
   get isGoingEW() {
     return this.dir.y === 0;
   }
-  get turnOptions() {
-    // return the possible turn options the current grid cell presents
-    const options = [];
-    const carGridPos = game.car.GridPos;
-
-    if (this.direction !== Direction.South && !this.North)
-      options.push(this.gridOption(0, this.NorthCell, carGridPos));
-
-    if (this.direction !== Direction.North && !this.South)
-      options.push(this.gridOption(2, this.SouthCell, carGridPos));
-
-    if (this.direction !== Direction.West && !this.East)
-      options.push(this.gridOption(1, this.EastCell, carGridPos));
-
-    if (this.direction !== Direction.East && !this.West)
-      options.push(this.gridOption(3, this.WestCell, carGridPos));
-
-    return options;
-  }
   gridOption(dir, gridPos, carGridPos) {
     const dist =
       (gridPos.x - carGridPos.x) ** 2 + (gridPos.y - carGridPos.y) ** 2;
@@ -421,7 +509,7 @@ class Chaser {
 
     const pos = { x: this.pos.x + dir.x, y: this.pos.y + dir.y };
 
-    for (const chaser of game.chasers)
+    for (const chaser of game.chasers.chasers)
       if (pos.x === chaser.pos.x && pos.y === chaser.pos.y) {
         if (chaser.crash > 0) this.crash = 0;
         else this.crash = 50;
@@ -477,10 +565,14 @@ class Chaser {
     else return -1;
   }
   isSameCell(chaser) {
-    return chaser !== this && chaser.pos.x === this.pos.x && chaser.pos.y === this.pos.y;
+    return (
+      chaser !== this &&
+      chaser.pos.x === this.pos.x &&
+      chaser.pos.y === this.pos.y
+    );
   }
   update(progress, counter) {
-    if (counter == 1) {
+    if (counter <= 2) {
       if (this.crash > 0) {
         this.crash -= 1;
         this.angle += 0.22;
@@ -500,7 +592,7 @@ class Chaser {
         let rev = false;
         if (this.isEnterCell) {
           // check to see if cell just entered already has another chaser, if so reverse (for now)
-          for (const chaser of game.chasers) {
+          for (const chaser of game.chasers.chasers) {
             if (this.isSameCell(chaser)) {
               // this.reverse();
               rev = true;
@@ -510,89 +602,25 @@ class Chaser {
           if (rev) {
             this.reverse();
           } else {
+            // calc if a turn is needed, and if so set this.dir and this.rotate
+            const directions = this.directions;
 
-          // calc if a turn is needed, and if so set this.dir and this.rotate
-          const directions = this.directions;
+            if (directions.length == 1) {
+              // set the current direction to the only posibility and rotate
+              this.rotate = this.rotation(this.dir, directions[0]);
+              this.dir = directions[0];
+            } else {
+              // there are 2/3 options, so use a PathFinder to decide which one to use
+              const pathFinder = new PathFinder(this.pos, directions);
+              const direction = pathFinder.search();
 
-          if (directions.length == 1) {
-            // set the current direction to the only posibility and rotate
-            this.rotate = this.rotation(this.dir, directions[0]);
-            this.dir = directions[0];
-          } else {
-            // there are 2/3 options, so use a PathFinder to decide which one to use
-            const pathFinder = new PathFinder(this.pos, directions);
-            const direction = pathFinder.search();
-
-            // set the current direction and rotate if different to previous direction
-            this.rotate = this.rotation(this.dir, direction);
-            this.dir = direction;
+              // set the current direction and rotate if different to previous direction
+              this.rotate = this.rotation(this.dir, direction);
+              this.dir = direction;
+            }
           }
         }
-        }
 
-        /*
-        const turnOptions = this.turnOptions;
-
-        const filtered = turnOptions.filter(
-          (o) => o.dir !== (this.direction + 2) % 4
-        );
-        const closest = turnOptions.reduce((acc, loc) =>
-          acc.dist < loc.dist ? acc : loc
-        );
-
-        if (this.direction !== closest.dir) {
-          const diff = this.direction - closest.dir;
-          this.direction = closest.dir;
-          if (diff === 3 || diff === -1) this.rotate = 1;
-          else this.rotate = -1;
-        }
-        if (this.direction === 0 && this.North !== 0) {
-          if (this.East === 0) {
-            this.direction = 1;
-            this.rotate = 1;
-          } else if (this.West === 0) {
-            this.direction = 3;
-            this.rotate = -1;
-          } else {
-            this.direction = 2;
-            this.rotate = 1;
-          }
-        }
-        if (this.direction === 2 && this.South !== 0) {
-          if (this.East === 0) {
-            this.direction = 1;
-            this.rotate = -1;
-          } else if (this.West === 0) {
-            this.direction = 3;
-            this.rotate = 1;
-          } else this.direction = 0;
-        }
-        if (this.direction === 1 && this.East !== 0) {
-          if (this.North === 0) {
-            this.direction = 0;
-            this.rotate = -1;
-          } else if (this.South === 0) {
-            this.direction = 2;
-            this.rotate = 1;
-          } else {
-            this.direction = 3;
-            this.rotate = -1;
-          }
-        }
-        if (this.direction === 3 && this.West !== 0) {
-          if (this.North === 0) {
-            this.direction = 0;
-            this.rotate = 1;
-          } else if (this.South === 0) {
-            this.direction = 2;
-            this.rotate = -1;
-          } else {
-            this.direction = 1;
-            this.rotate = -1;
-          }
-        }
-      }
-      */
         const rotationSpeed = 0.12;
         const north = 0;
         const east = Math.PI * 0.5;
@@ -673,6 +701,18 @@ class Chaser {
     //   this.carScale * pos.scale.x,
     //   this.carScale * pos.scale.y
     // );
+  }
+}
+class Chasers {
+  constructor(positions) {
+    this.chasers = [];
+    for (const pos of positions) this.chasers.push(new Chaser(pos));
+  }
+  update(progress, counter) {
+    for (const chaser of this.chasers) chaser.update(progress, counter);
+  }
+  draw() {
+    for (const chaser of this.chasers) chaser.draw();
   }
 }
 class PathFinder {
@@ -1107,39 +1147,37 @@ class Map {
     const mapY = height * 4;
     // Game.View.strokeRect(0, 0, width, height);
 
-    /*
-    for (let j = 0; j < 56; ++j) {
-      for (let i = 0; i < 32; ++i) {
-        const x = i * width;
-        const y = j * height;
-        const offsetX = Map.X * calX;
-        const offsetY = Map.Y * calY;
-        Game.View.strokeRect(
-          mapX + x - offsetX,
-          mapY + y - offsetY,
-          width - 1,
-          height - 1
-        );
-
-        Game.View.fillText(
-          `(${i},${j})`,
-          mapX + x - offsetX + 2,
-          mapY + y - offsetY + 10
-        );
-
-        /*
-        if (Map.getPosition(i, j) === 1) {
+    if (false) {
+      for (let j = 0; j < 56; ++j) {
+        for (let i = 0; i < 32; ++i) {
+          const x = i * width;
+          const y = j * height;
+          const offsetX = Map.X * calX;
+          const offsetY = Map.Y * calY;
           Game.View.strokeRect(
-            mapX + x - offsetX + width * 0.3,
-            mapY + y - offsetY + height * 0.3,
-            width * 0.35,
-            height * 0.35
+            mapX + x - offsetX,
+            mapY + y - offsetY,
+            width - 1,
+            height - 1
           );
+
+          Game.View.fillText(
+            `(${i},${j})`,
+            mapX + x - offsetX + 2,
+            mapY + y - offsetY + 10
+          );
+
+          if (Map.getPosition(i, j) === 1) {
+            Game.View.strokeRect(
+              mapX + x - offsetX + width * 0.3,
+              mapY + y - offsetY + height * 0.3,
+              width * 0.35,
+              height * 0.35
+            );
+          }
         }
       }
     }
-    */
-
     //Game.View.fillRect(504, 820, 16, 16);
   }
   static Convert(x, y) {
@@ -1207,12 +1245,28 @@ class Game {
     // const fontSize = 40 / scale;
     // Game.View.font = `${fontSize}px Lucida Console`;
   }
-  // game objects
+  setup() {
+    const positions = [
+      { x: 15, y: 53 },
+      { x: 17, y: 53 },
+      { x: 13, y: 53 },
+      { x: 11, y: 53 },
+      { x: 19, y: 53 },
+    ];
 
-  map = new Map();
-  car = new Car();
-  chasers = [];
+    this.map = new Map();
+    this.car = new Car();
+    this.chasers = new Chasers(positions);
+    this.flags = new Flags();
+    this.smokes = new Smokes();
 
+    this.gameObjects = [];
+    this.gameObjects.push(this.map);
+    this.gameObjects.push(this.car);
+    this.gameObjects.push(this.chasers);
+    this.gameObjects.push(this.flags);
+    this.gameObjects.push(this.smokes);
+  }
   update() {
     GamePad.update();
     if (GameInput.isPaused) {
@@ -1220,31 +1274,17 @@ class Game {
       return;
     }
     const totalUpdates = 5;
-    let counter = 1;
+    let counter = 0;
     const progress = 1 / totalUpdates;
-    while (counter <= totalUpdates) {
-      // update all game objects e.g: this.playerLeft?.update(progress, counter);
-      this.map.update(progress, counter);
-      this.car.update(progress, counter);
-      for (let i = 0; i < this.chasers.length; ++i)
-        this.chasers[i].update(progress, counter);
+    while (++counter <= totalUpdates)
+      for (const go of this.gameObjects) go.update(progress, counter);
 
-      counter += 1;
-    }
     this.draw();
   }
   draw() {
-    // clear the screen
-    //const height = Game.Canvas.height;
-    //const width = Game.Canvas.width;
-    // Game.View.clearRect(0, 0, width, height);
     Game.View.clearRect(0, 0, Game.Canvas.width, Game.Canvas.height);
 
-    this.map.draw();
-    this.car.draw();
-    for (let i = 0; i < this.chasers.length; ++i) this.chasers[i].draw();
-
-    // draw all game objects e.g: this.playerLeft.draw();
+    for (const go of this.gameObjects) go.draw();
   }
   step(timestamp) {
     if (GameInput.isRestart) {
@@ -1273,12 +1313,7 @@ class Game {
     // start/setup logic
     Game.resize();
 
-    // set up  game objects
-    this.chasers.push(new Chaser());
-    this.chasers.push(new Chaser(17, 53));
-    this.chasers.push(new Chaser(13, 53));
-    this.chasers.push(new Chaser(11, 53));
-    this.chasers.push(new Chaser(19, 53));
+    this.setup();
 
     requestAnimationFrame(Game.animate);
   }
