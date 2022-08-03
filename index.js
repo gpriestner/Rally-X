@@ -178,6 +178,16 @@ class Flag {
     if (sflag) this.image = Picture.Load("/images/Sflagt.png");
     else this.image = Picture.Load("/images/Flagt.png");
   }
+  draw() {
+    const pos = Map.Convert(this.x, this.y);
+
+    Game.View.drawImage(this.image, 0, 0, 24, 24,
+    -0.5 * Car.scale * pos.scale.x, 
+    -0.5 * Car.scale * pos.scale.y, // -10, // pos.y,
+    Car.scale * pos.scale.x,
+    Car.scale * pos.scale.y
+);
+  }
 }
 class Car {
   //  image = Car.Picture("images/bluecar24t2.png");
