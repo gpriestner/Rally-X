@@ -128,17 +128,29 @@ class Keyboard {
 class GameInput {
   // Down(A) = 0, Right(B) = 1, Left(X) = 2, Up(Y) = 3, LeftBumper = 4, RightBumper = 5, LeftTrigger = 6, RightTrigger = 7, Restart = 8
   // Pause = 9, LeftJoyPressed = 10, RightJoyPressed = 11, UpJoyPad = 12, DownJoyPad = 13, LeftJoyPad = 14, RightJoyPad = 15
+  static get isPanNorth() {
+    return (Keyboard.isDown("ShiftLeft") && Keyboard.isDown("ArrowUp")) || GamePad.isDown(3 /* Up */);
+  }
+  static get isPanSouth() {
+    return (Keyboard.isDown("ShiftLeft") && Keyboard.isDown("ArrowDown")) || GamePad.isDown(0 /* Down */);
+  }
+  static get isPanWest() {
+    return (Keyboard.isDown("ShiftLeft") && Keyboard.isDown("ArrowLeft")) || GamePad.isDown(2 /* Left */);
+  }
+  static get isPanEast() {
+    return (Keyboard.isDown("ShiftLeft") && Keyboard.isDown("ArrowRight")) || GamePad.isDown(1 /* Right */);
+  }
   static get isMoveNorth() {
-    return Keyboard.isDown("ArrowUp") || GamePad.isDown(3 /* Up */);
+    return Keyboard.isDown("ArrowUp");
   }
   static get isMoveSouth() {
-    return Keyboard.isDown("ArrowDown") || GamePad.isDown(0 /* Down */);
+    return Keyboard.isDown("ArrowDown");
   }
   static get isMoveWest() {
-    return Keyboard.isDown("ArrowLeft") || GamePad.isDown(2 /* Left */);
+    return Keyboard.isDown("ArrowLeft");
   }
   static get isMoveEast() {
-    return Keyboard.isDown("ArrowRight") || GamePad.isDown(1 /* Right */);
+    return Keyboard.isDown("ArrowRight");
   }
   static get isSmoke() {
     return Keyboard.isPressed("Space") || GamePad.isPressed(5);
@@ -166,6 +178,14 @@ class GameInput {
   }
   static get angle() {
     return GamePad.angle;
+  }
+  static get Direction() {
+    let x = 0, y = 0;
+    if (Keyboard.isDown("ArrowUp")) x -= 1;
+    if (Keyboard.isDown("ArrowDown")) x += 1;
+    if (Keyboard.isDown("ArrowLeft")) y -= 1;
+    if (Keyboard.isDown("ArrowRight")) y += 1;
+    return { x, y };
   }
 }
 class Picture {
@@ -369,7 +389,7 @@ class Car {
     return Map.getPosition(gridX, gridY);
   }
   update(progress, counter) {
-    this.speed = GamePad.dx ** 2 + GamePad.dy ** 2;
+    // this.speed = GamePad.dx ** 2 + GamePad.dy ** 2;
 
     const angle = GameInput.angle;
     if (angle) {
@@ -382,6 +402,7 @@ class Car {
         this.y = y;
       }
     }
+
     if (GameInput.isCarScaleDown && Car.scale > 0.11) Car.scale -= 0.1;
     if (GameInput.isCarScaleUp && Car.scale < 50.01) Car.scale += 0.1;
   }
@@ -1092,10 +1113,10 @@ class Map {
   }
   static mapImage = Map.Picture("images/rally-x-map.png");
   update(progress, counter) {
-    if (GameInput.isMoveEast && Map.X < 1008) Map.X += 1;
-    if (GameInput.isMoveWest && Map.X > 0) Map.X -= 1;
-    if (GameInput.isMoveNorth && Map.Y > 0) Map.Y -= 1;
-    if (GameInput.isMoveSouth && Map.Y < 1536) Map.Y += 1;
+    if (GameInput.isPanEast && Map.X < 1008) Map.X += 1;
+    if (GameInput.isPanWest && Map.X > 0) Map.X -= 1;
+    if (GameInput.isPanNorth && Map.Y > 0) Map.Y -= 1;
+    if (GameInput.isPanSouth && Map.Y < 1536) Map.Y += 1;
 
     if (GameInput.isZoomIn) {
       Map.X += 1;
